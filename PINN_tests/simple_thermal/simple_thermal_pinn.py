@@ -70,11 +70,11 @@ Neural Network
 """
 
 inp = tf.keras.Input((2,))
-hid = tf.keras.layers.Dense(20, activation="tanh")(inp)
-hid = tf.keras.layers.Dense(20, activation="tanh")(hid)
-hid = tf.keras.layers.Dense(20, activation="tanh")(hid)
+hid = tf.keras.layers.Dense(20, activation="relu")(inp)
+hid = tf.keras.layers.Dense(20, activation="relu")(hid)
+hid = tf.keras.layers.Dense(20, activation="relu")(hid)
 outp = tf.keras.layers.Dense(1, activation="linear")(hid)
-#3 hidden layers of 20 neurons activated by hyperbolic tangent function
+#3 hidden layers of 20 neurons activated by ReLU function
 
 
 """
@@ -82,10 +82,10 @@ main
 """
 
 model = PINN(inp, outp)
-opt = tf.keras.optimizers.Adam(learning_rate=5e-4)
+opt = tf.keras.optimizers.Adam(learning_rate=2e-3)
 model.compile(optimizer=opt)
 
-model.fit(vect, vals, epochs=1000, batch_size=vect.shape[0])
+model.fit(vect, vals, epochs=3000, batch_size=10000) #full-batch because if minibatch is used, one minibatch could have no inlet/wall/outlet points and generated a nan value
 hist = model.history.history # logs metrics
 
 """
@@ -102,4 +102,8 @@ for k in hist.keys(): # plotting all metrics
     met = hist[k]
     plt.plot(met, label=k)
 plt.legend()
+plt.show()
+
+T_mean = np.mean(Ts, axis=0) # plotting the mean temperature along an axis to see if the solution is linear
+plt.plot(T_mean)
 plt.show()

@@ -4,32 +4,38 @@ import matplotlib.pyplot as plt
 
 
 """
+loading distance and BC function
+"""
+
+inp_BC = tf.keras.Input((2,))
+hid = tf.keras.layers.Dense(5, activation="swish")(inp_BC)
+outp_BC = tf.keras.layers.Dense(1, activation=None)(hid)
+
+model_BC = tf.keras.Model(inp_BC, outp_BC)
+model_BC.load_weights("W_BC.h5")
+
+inp_dist = tf.keras.Input((2,))
+hid = tf.keras.layers.Dense(5, activation="swish")(inp_dist)
+outp_dist = tf.keras.layers.Dense(1, activation=None)(hid)
+
+model_distance = tf.keras.Model(inp_dist, outp_dist)
+model_distance.load_weights("W_dist.h5")
+
+"""
 layer enforcing BCs
 """
 
 class BC_force_layer(tf.keras.layers.Layer):
-    def __init__(self, L, temp_cold, temp_hot):
+    def __init__(self):
         super(BC_force_layer, self).__init__()
-        self.L, self.temp_cold, self.temp_hot = L, temp_cold, temp_hot
 
-    @tf.function
-    def geo_func(self, Xs):
-        return tf.math.multiply(Xs, tf.math.subtract(self.L, Xs)) #smooth distance function =0 for x=0 or x=L
-
-    @tf.function
-    def BC_filler(self, Xs):
-        return tf.math.add(
-            tf.math.scalar_mul(tf.constant(1175./1.21), tf.math.square(Xs)), #function interpolating all the BCs (volontarily non linear to force the network to learn something)
-            tf.constant(25.)
-        )
 
     def call(self, inputs, layer):
-        Xs = inputs[:, 0]
-        BC_fill = self.BC_filler(Xs)[:, tf.newaxis]
-        geo_lim = self.geo_func(Xs)[:, tf.newaxis]
+        geo_lim = model_distance(inputs)
+        BC_fill = model_BC(inputs)
         result = tf.math.add(
             BC_fill,
-            tf.math.multiply(layer, geo_lim) # ponders the NN output by the distnace function and adds the BC-interpolating function
+            tf.math.multiply(layer, geo_lim) # ponders the NN output by the distance function and adds the BC-interpolating function
         )
         return result
 
@@ -48,11 +54,11 @@ vect = np.stack((X, Y), axis=-1)
 vect = vect.reshape((-1, 2)) #grid as a vector list
 
 vals = np.full(vect.shape[0], np.nan) #BC information storage
-vals[vect[:, 0] == 0.] = 25. #inlet values set at 1200°C
-vals[vect[:, 0] == L] = 1200. #outlet values set at 25°C 
+vals[vect[:, 0] == 0.] = 1200. #inlet values set at 1200°C
+vals[vect[:, 0] == L] = 25. #outlet values set at 25°C 
 
-test_values = (1175. / 1.1) * vect[:, 0] + 25.
 
+test_values = (1175. / 1.1) * (1.1 - vect[:, 0]) + 25.
 
 """
 pinn
@@ -81,13 +87,13 @@ class PINN(tf.keras.Model):
             T_yy = tape1.gradient(T_y,y)
 
             res_T = T_xx + T_yy # thermal stationnary equation residuals
-            loss = tf.math.reduce_mean(tf.math.square(res_T)) #taking the mse only of the residuals
+            loss = tf.math.reduce_mean(tf.math.abs(res_T)) #taking the mse only of the residuals
 
         grads = gradtape.gradient(loss, self.trainable_variables) # calculating gradient
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables)) # applying gradient
 
         return {"loss":loss}
-    
+            
     def test_step(self, data):
         inputs = data[0]
         vals = data[1]
@@ -101,12 +107,14 @@ Neural Network
 """
 
 inp = tf.keras.Input((2,))
-hid = tf.keras.layers.Dense(20, activation="relu")(inp)
-hid = tf.keras.layers.Dense(20, activation="relu")(hid)
-hid = tf.keras.layers.Dense(20, activation="relu")(hid)
-hid = tf.keras.layers.Dense(1, activation="linear")(hid)
-outp = BC_force_layer(L, 1200., 25.)(inp, hid)
-#3 hidden layers of 20 neurons activated by ReLU + 1 layer enforcing BCs
+hid = tf.keras.layers.Dense(20, activation="swish")(inp)
+hid = tf.keras.layers.Dense(20, activation="swish")(hid)
+hid = tf.keras.layers.Dense(20, activation="swish")(hid)
+# hid = tf.keras.layers.Dense(40, activation="swish")(hid)
+# hid = tf.keras.layers.Dense(40, activation="swish")(hid)
+hid = tf.keras.layers.Dense(1, activation=None)(hid)
+outp = BC_force_layer()(inp, hid)
+#3 hidden layers of 20 neurons activated by ReLU function + 1 layer enforcing BCs
 
 
 """
@@ -114,12 +122,13 @@ main
 """
 
 model = PINN(inp, outp)
-opt = tf.keras.optimizers.Adam(learning_rate=2e-3)
+opt = tf.keras.optimizers.Adam(learning_rate=1e-3, amsgrad=True)
 model.compile(optimizer=opt, loss="mse")
 
 # model.run_eagerly = True
-model.fit(vect, vals, epochs=20, validation_data=(vect, test_values)) # 20 epochs but uses mini-batch, which is possible because only the local equation has to be solved
+model.fit(vect, vals, epochs=500, batch_size=256, validation_data=(vect, test_values)) # 20 epochs but uses mini-batch, which is possible because only the local equation has to be solved
 hist = model.history.history # logs metrics
+model.save_weights("W_FaL_BC_thermal.h5")
 
 """
 plot
@@ -138,7 +147,7 @@ plt.legend()
 plt.show()
 
 T_mean = np.mean(Ts, axis=0)
-T_par = (1175./1.21)* np.linspace(0., 1.1, 200)**2 + 25. # plotting mean along an axis and the BC-interpolating function to see if the NN as learn correctly the solution
+T_par = np.mean(model_BC.predict(vect).reshape((50, 200)), axis=0) # plotting mean along an axis and the BC-interpolating function to see if the NN as learn correctly the solution
 plt.plot(T_mean, label="result")
 plt.plot(T_par, label="BC-enforcing function")
 plt.legend()

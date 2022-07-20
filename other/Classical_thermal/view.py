@@ -4,10 +4,10 @@ from data_viewer import data_viewer
 
 result = np.load("res.npy")
 
-dv = data_viewer(result, [0.1, 0.06, 205.], ["X (m)", "Y(m)", "T(s)"])
+dv = data_viewer(result, [100., 6., 205.], ["X (m)", "Y(m)", "T(s)"])
 dv.show_fig()
 
-X, t = np.meshgrid(np.linspace(0., 0.1, 201), np.linspace(0., 205., 41))
+X, t = np.meshgrid(np.linspace(0., 10., 201), np.linspace(0., 205., 41))
 
 fig = plt.figure()
 ax = fig.add_subplot(projection='3d')

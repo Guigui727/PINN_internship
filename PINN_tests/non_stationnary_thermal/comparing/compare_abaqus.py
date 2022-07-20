@@ -1,7 +1,9 @@
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from data_viewer import data_viewer
+
+import sys
+sys.path.append('../')
 
 
 """
@@ -77,6 +79,12 @@ vect = vect / np.array([L, L, t])[np.newaxis, :]
 vect = vect.astype(np.float32)
 
 """
+abaqus result loading
+"""
+
+abaqus_res = np.load("comparing/res.npy").mean(1)
+
+"""
 plotting
 """
 
@@ -87,12 +95,22 @@ Ts = model.predict(vect) * 1200.
 Ts = Ts.reshape((L_s, l_s, t_s)) # reformating model predicting
 
 T_par = 1200. * model_BC.predict(vect).reshape((L_s, l_s, t_s)).mean(axis=1) # plotting mean along an axis and the BC-interpolating function to see if the NN as learn correctly the solution
+
 fig = plt.figure()
 ax = fig.add_subplot(projection='3d')
 ax.plot_wireframe(X[:, 0, :], Time[:, 0, :], Ts.mean(axis=1), label="NN", color='r')
-ax.plot_wireframe(X[:, 0, :], Time[:, 0, :], T_par, label="partial function", color='b') # plotting mean along an axis and the BC-interpolating function to see if the NN as learn correctly the solution
+ax.plot_wireframe(X[:, 0, :], Time[:, 0, :], abaqus_res, label="simulation result", color='b') 
 plt.legend()
 plt.show()
 
-view_BC = data_viewer(Ts, [L, l, t], ["X (cm)", "Y(cm)", "T(s)"])
-view_BC.show_fig()
+im = plt.imshow((T_par - abaqus_res).T, extent=[0., 10., 205., 0.], aspect='auto')
+plt.colorbar(im, orientation='horizontal', label='\u0394T (°C)')
+plt.xlabel('x (cm)')
+plt.ylabel('t (s)')
+plt.show()
+
+im2 = plt.imshow(np.abs((T_par - abaqus_res).T / abaqus_res.T), extent=[0., 10., 205., 0.], aspect='auto', vmax=5., vmin=0.)
+plt.colorbar(im2, orientation='horizontal', label='absolute relative error (%)')
+plt.xlabel('x (cm)')
+plt.ylabel('t (s)')
+plt.show()

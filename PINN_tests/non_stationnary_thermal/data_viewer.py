@@ -16,7 +16,7 @@ class data_viewer():
     def show_fig(self):
 
         fig, ax = plt.subplots()
-        img = plt.imshow(self.data[:, :, self.param.shape[0] - 1].T, extent=self.extent, vmax=self.data.max(), vmin=self.data.min())
+        img = plt.imshow(self.data[:, :, self.param.shape[0] - 1].T, extent=self.extent, vmax=np.nanmax(self.data), vmin=np.nanmin(self.data))
         ax.set_xlabel(self.units[0])
         ax.set_ylabel(self.units[1])
 

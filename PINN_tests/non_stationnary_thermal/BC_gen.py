@@ -12,11 +12,11 @@ files = [f for f in os.listdir(os.getcwd()) if os.path.isfile(os.path.join(os.ge
 geometry
 """
 
-L, l, t = 1.1, 0.4, 1000.
+L, l, t = 10., 6., 205.
 
-L_lin = np.linspace(0., L, 100)
-l_lin = np.linspace(0., l, 25)
-t_lin = np.linspace(0., t, 200)
+L_lin = np.linspace(0., L, 201)
+l_lin = np.linspace(0., l, 3)
+t_lin = np.linspace(0., t, 41)
 
 L_s, l_s, t_s = L_lin.shape[0], l_lin.shape[0], t_lin.shape[0]
 
@@ -67,9 +67,10 @@ final_dist_block = final_dist.reshape((L_s, l_s, t_s))
 BC pts
 """
 bc_val = np.full(pts_bc.shape[0], 25., dtype=np.float32)
-msk = pts_bc[:, 0] == 0.
-coef = 2e1
-bc_val[msk] = 25. + 1175. * (1. - np.exp(- coef * pts_bc[msk, 2]))#associates to every boundary point to its value
+msk = np.stack([pts_bc[:, 0] == 0., pts_bc[:, 2] != 0.], axis=1).all(1)
+# coef = 2e1
+# bc_val[msk] = 25. + 1175. * (1. - np.exp(- coef * pts_bc[msk, 2]))
+bc_val[msk] = 1200. #associates to every boundary point to its value
 bc_val = bc_val / 1200. # divides by a reference value
 
 """
@@ -82,58 +83,6 @@ def create_NN():
     outp = tf.keras.layers.Dense(1, activation=None)(hid)
     #simple NN with 2 hidden layer of 40 and 30 neurons activated by swish
     return inp, outp
-
-"""
-L-BFGS model (NOT USED HERE)
-"""
-
-class LBFGS_model(tf.keras.Model):
-    def __init__(self, inp, outp):
-        super(LBFGS_model, self).__init__(inp, outp)
-
-        self.shapes = [tf.shape(x) for x in self.trainable_variables] #gets the shapes of trainable NN parameters
-        self.flat_shapes = [tf.size(x) for x in self.trainable_variables] #gets the shapes flattened of trainable NN parameters
-    
-    def train_step(self, data):
-        x, y = data
-        
-        def fun(train_var): 
-            for a, b in zip(self.trainable_variables, self.reshaping(train_var)):
-                a.assign(b)
-            return self.compiled_loss(y, self(x, training=True), regularization_losses=self.losses) #return the loss function to optimize
-
-        def fun_val_and_grad(train_var): #return the loss function and its gradient
-            with tf.GradientTape() as tape:
-                loss = fun(train_var)
-            grads = tape.gradient(loss, self.trainable_weights)
-            r = (loss, self.flattening(grads))
-            return r
-
-        optim_res = tfp.optimizer.lbfgs_minimize(
-            fun_val_and_grad,
-            initial_position = self.flattening(self.trainable_variables),
-            max_iterations = 50
-        ) #tensorflow probability implementation of L-BFGS
-        
-        for a, b in zip(self.trainable_variables, self.reshaping(optim_res.position)):
-                a.assign(b)
-        loss = self.compiled_loss(y, self(x, training=True), regularization_losses=self.losses)
-
-        return {"loss": loss, "converged":optim_res.converged, "failed":optim_res.failed}
-
-
-    def flattening(self, vect_list): #flatten the trainable variables values 
-        l = []
-        for v in vect_list:
-            l.append(tf.reshape(v, (-1,)))
-        r = tf.concat(l, axis=0)
-        return r
-
-
-    def reshaping(self, vect): #reshapes a flat vector representing all the NN parameters to all the trainable varables
-        flat_list = tf.split(vect, self.flat_shapes)
-        return [tf.reshape(fv, fvs) for fv, fvs in zip(flat_list, self.shapes)]
-
 
 
 """
@@ -148,7 +97,7 @@ def main_dist(plotting=True, training=True):
         opt = tf.keras.optimizers.Adam(learning_rate=1e-3, amsgrad=True)
         model.compile(optimizer=opt, loss="mse")
 
-        model.fit(vect, final_dist, epochs=5, batch_size = vect.shape[0] // 3999, sample_weight=weight_list)
+        model.fit(vect, final_dist, epochs=20, batch_size = vect.shape[0] // 3999, sample_weight=weight_list)
         hist = model.history.history # logs metrics
         model.save_weights('W_dist.h5')
     else:
@@ -171,7 +120,7 @@ def main_dist(plotting=True, training=True):
             plt.legend()
             plt.show()
 
-        view_dist = data_viewer(dist, [L, l, t], ["X (m)", "Y(m)", "T(s)"])
+        view_dist = data_viewer(dist, [L, l, t], ["X (cm)", "Y(cm)", "T(s)"])
         view_dist.show_fig()
 
 main_dist()
@@ -186,7 +135,7 @@ def main_BC(plotting=True, training=True):
         opt = tf.keras.optimizers.Adam(learning_rate=1e-3, amsgrad=True)
         model2.compile(optimizer=opt, loss="mse")
 
-        model2.fit(pts_bc, bc_val, epochs=20, batch_size = pts_bc.shape[0] // 3000)
+        model2.fit(pts_bc, bc_val, epochs=100, batch_size = pts_bc.shape[0] // 3000)
         hist = model2.history.history # logs metrics
         model2.save_weights('W_BC.h5')
     else:
@@ -208,7 +157,7 @@ def main_BC(plotting=True, training=True):
             plt.legend()
             plt.show()
 
-        view_BC = data_viewer(BC_inter, [L, l, t], ["X (m)", "Y(m)", "T(s)"])
+        view_BC = data_viewer(BC_inter, [L, l, t], ["X (cm)", "Y(cm)", "T(s)"])
         view_BC.show_fig()
 
 main_BC()

@@ -49,11 +49,11 @@ geometry
 # generate a grid geometry
 
 
-L, l, t = 1.1, 0.4, 1000.
+L, l, t = 10., 6., 205.
 
-L_lin = np.linspace(0., L, 100)
-l_lin = np.linspace(0., l, 25)
-t_lin = np.linspace(0., t, 200)
+L_lin = np.linspace(0., L, 201)
+l_lin = np.linspace(0., l, 3)
+t_lin = np.linspace(0., t, 41)
 
 L_s, l_s, t_s = L_lin.shape[0], l_lin.shape[0], t_lin.shape[0]
 
@@ -122,15 +122,16 @@ outp = BC_force_layer()(inp, hid)
 main
 """
 
-alpha = 188e-3 * t / L**2 # 188e-7 * t / L**2 is a true value for steel, the given value is enrealisticly too big for the exemple
+alpha = 188e-3 * t / L**2 # in cm^2/s
 model = PINN(inp, outp, alpha=alpha)
 opt = tf.keras.optimizers.Adam(learning_rate=1e-3, amsgrad=True)
 model.compile(optimizer=opt, loss="mse")
 
+epoch_per_loop = 20
 
 for i in range(20):
     temporal_mask = vect[:, 2] <= (i + 1.) / 20.
-    model.fit(vect[temporal_mask, :], epochs=5 * (i + 1), initial_epoch=5 * i, batch_size=512) # increases time slice every few epoch to allows the propagation of heat
+    model.fit(vect[temporal_mask, :], epochs=epoch_per_loop * (i + 1), initial_epoch=epoch_per_loop * i, batch_size=512) # increases time slice every few epoch to allows the propagation of heat
 
 
 hist = model.history.history # logs metrics
@@ -157,5 +158,5 @@ for k in hist.keys(): # plotting all metrics /!\ does not work with time slices 
 plt.legend()
 plt.show()
 
-view_BC = data_viewer(Ts, [L, l, t], ["X (m)", "Y(m)", "T(s)"])
+view_BC = data_viewer(Ts, [L, l, t], ["X (cm)", "Y(cm)", "T(s)"])
 view_BC.show_fig()
